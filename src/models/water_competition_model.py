@@ -252,7 +252,7 @@ class WaterCompetitionModel(Model):
         return False
     
     def reset_randomizer(self, seed=None):
-        """Reset the model's random number generator (Mesa 3.x feature)"""
+        """Reset the model's random number generator"""
         super().reset_randomizer(seed)
         self.steps = 0
     

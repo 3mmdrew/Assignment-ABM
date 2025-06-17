@@ -4,7 +4,7 @@ import random
 class HumanAgent(Agent):
     """Human agent that consumes water and adjusts cooperation level - Mesa 3.x compatible"""
     
-    def __init__(self, model,water_needed=5,pos=None, unique_id=None, **kwargs):
+    def __init__(self,model,water_needed=5,pos=None,unique_id=None,**kwargs):
         super().__init__(model)
 
         # self.pos will be set by grid.place_agent()
@@ -12,14 +12,14 @@ class HumanAgent(Agent):
         self.water_satisfied = True
         self.memory = []  # Store recent water availability
         self.movement_state = "stationary"  # or "searching"
-        self.water_need = 5  # units per timestep
+        self.water_need = water_needed  # units per timestep
         self.original_pos = None  # Will be set when agent is placed
         
         # Decision parameters
         self.cooperation_increase = 0.1
-        self.cooperation_decrease = 0.15
+        self.cooperation_decrease = 0.1
         self.memory_length = 5
-        self.satisfaction_threshold = 0.8
+        self.satisfaction_threshold = 0.75
     
     def assess_local_water(self):
         """Assess water availability in local neighborhood"""
@@ -103,8 +103,9 @@ class HumanAgent(Agent):
         # Assess and consume water
         consumed = self.consume_water()
         
-        # Update cooperation based on satisfaction
+        # Update cooperation and movement state based on satisfaction
         self.update_cooperation_level()
         
-        # Decide on movement (only if unsatisfied)
-        self.decide_movement()
+        # Only decide on movement if we're still unsatisfied after all updates
+        if not self.water_satisfied:
+            self.decide_movement()
