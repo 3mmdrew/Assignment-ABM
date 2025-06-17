@@ -7,15 +7,22 @@ import math
 # Import the agent classes
 from agents.human_agent import HumanAgent
 from agents.ai_agent import AIAgent
-from environment.data_center import DataCenter
 from environment.water_cell import WaterCell
 
 class WaterCompetitionModel(Model):
-    """Main model class for human-AI water competition - Mesa 3.x compatible"""
+    """Simplified model class for human-AI water competition - Mesa 3.x compatible"""
     
-    def __init__(self, width=100, height=100, num_humans=200, num_ai_agents=10,
-                 dc_pos=(50, 50), dc_influence_radius=25, ai_impact_coeff=0.1, 
-                 seed=None, **kwargs):
+    def __init__(self, 
+                 width=100, 
+                 height=100, 
+                 num_humans=200, 
+                 num_ai_agents=10, 
+                 max_water_capacity=1, 
+                 base_water_replenishment=0.1,
+                 ai_consumption_rate=0.5,
+                 human_water_needs=5, 
+                 seed=None, 
+                 **kwargs):
         # CRITICAL: Must call super().__init__(seed=seed) for Mesa 3.x
         super().__init__(seed=seed)
         
@@ -24,9 +31,11 @@ class WaterCompetitionModel(Model):
         self.height = height
         self.num_humans = num_humans
         self.num_ai_agents = num_ai_agents
-        self.dc_pos = dc_pos
-        self.dc_influence_radius = dc_influence_radius
-        self.ai_impact_coeff = ai_impact_coeff
+        self.max_water_capacity = max_water_capacity
+        self.base_water_replenishment = base_water_replenishment
+
+        self.ai_consumption_rate = ai_consumption_rate
+        self.human_water_needs = human_water_needs
         
         # Initialize grid (no scheduler needed in Mesa 3.x)
         self.grid = MultiGrid(width, height, True)
@@ -34,18 +43,13 @@ class WaterCompetitionModel(Model):
         # Initialize water grid
         self.initialize_water_grid()
         
-        # Initialize data center
-        self.data_center = DataCenter(dc_pos)
-        self.dc_water_available = True
-        
         # Create agents (they automatically get added to self.agents)
         self.create_human_agents()
         self.create_ai_agents()
         
-        # Data collection - updated for Mesa 3.x
+        # Data collection - simplified for Mesa 3.x
         self.datacollector = DataCollector(
             model_reporters={
-                "Total_AI_Consumption": lambda m: m.data_center.total_consumption,
                 "Average_Human_Cooperation": lambda m: np.mean([
                     agent.cooperation_level for agent in m.agents 
                     if isinstance(agent, HumanAgent)
@@ -63,22 +67,16 @@ class WaterCompetitionModel(Model):
                         if isinstance(agent, HumanAgent) and not agent.water_satisfied) /
                     max(1, sum(1 for agent in m.agents if isinstance(agent, HumanAgent)))
                 ),
-                "Humans_Near_DC": lambda m: sum(
-                    1 for agent in m.agents 
-                    if isinstance(agent, HumanAgent) and 
-                    hasattr(agent, 'pos') and agent.pos is not None and
-                    math.sqrt((agent.pos[0] - m.dc_pos[0])**2 + 
-                             (agent.pos[1] - m.dc_pos[1])**2) <= m.dc_influence_radius
+                "Total_AI_Agents": lambda m: sum(
+                    1 for agent in m.agents if isinstance(agent, AIAgent)
                 ),
-                "Humans_Near_DC_Ratio": lambda m: (
-                    sum(1 for agent in m.agents 
-                        if isinstance(agent, HumanAgent) and 
-                        hasattr(agent, 'pos') and agent.pos is not None and
-                        math.sqrt((agent.pos[0] - m.dc_pos[0])**2 + 
-                                 (agent.pos[1] - m.dc_pos[1])**2) <= m.dc_influence_radius) /
-                    max(1, sum(1 for agent in m.agents if isinstance(agent, HumanAgent)))
+                "Total_Human_Agents": lambda m: sum(
+                    1 for agent in m.agents if isinstance(agent, HumanAgent)
                 ),
-                "DC_Water_Reserve": lambda m: m.data_center.water_reserve
+                "Average_AI_Activity": lambda m: np.mean([
+                    agent.activity_level for agent in m.agents 
+                    if isinstance(agent, AIAgent)
+                ]) if any(isinstance(agent, AIAgent) for agent in m.agents) else 0
             },
             agent_reporters={
                 "Cooperation": lambda a: a.cooperation_level if isinstance(a, HumanAgent) else None,
@@ -94,47 +92,57 @@ class WaterCompetitionModel(Model):
         # Initialize step counter (Mesa 3.x doesn't have schedule.steps)
         self.steps = 0
     
-    def initialize_water_grid(self):
-        """Initialize grid with water cells using random clustering"""
-        # Create initial random water levels
-        water_levels = np.zeros((self.width, self.height))
+    def initialize_water_grid(self, use_clustering=False):
+        """Initialize grid with water cells. By default, uses uniform distribution.
         
-        # Create random clusters
-        num_clusters = 10  # Number of water-rich clusters
-        cluster_radius = 15  # Radius of influence for each cluster
-        
-        for _ in range(num_clusters):
-            # Random cluster center
-            center_x = self.random.randrange(self.width)
-            center_y = self.random.randrange(self.height)
+        Args:
+            use_clustering (bool): If True, creates clustered water distribution.
+                                 If False (default), creates uniform water distribution.
+        """
+        if use_clustering:
+            # Create initial random water levels
+            water_levels = np.zeros((self.width, self.height))
             
-            # Add water to cells within cluster radius
-            for x in range(max(0, center_x - cluster_radius), min(self.width, center_x + cluster_radius)):
-                for y in range(max(0, center_y - cluster_radius), min(self.height, center_y + cluster_radius)):
-                    # Calculate distance from cluster center
-                    distance = math.sqrt((x - center_x)**2 + (y - center_y)**2)
-                    if distance <= cluster_radius:
-                        # Add water with decreasing amount based on distance
-                        water_amount = 80 * (1 - distance/cluster_radius)
-                        water_levels[x][y] += water_amount
+            # Create random clusters
+            num_clusters = 10  # Number of water-rich clusters
+            cluster_radius = 15  # Radius of influence for each cluster
+            
+            for _ in range(num_clusters):
+                # Random cluster center
+                center_x = self.random.randrange(self.width)
+                center_y = self.random.randrange(self.height)
+                
+                # Add water to cells within cluster radius
+                for x in range(max(0, center_x - cluster_radius), min(self.width, center_x + cluster_radius)):
+                    for y in range(max(0, center_y - cluster_radius), min(self.height, center_y + cluster_radius)):
+                        # Calculate distance from cluster center
+                        distance = math.sqrt((x - center_x)**2 + (y - center_y)**2)
+                        if distance <= cluster_radius:
+                            # Add water with decreasing amount based on distance
+                            water_amount = 80 * (1 - distance/cluster_radius)
+                            water_levels[x][y] += water_amount
+            
+            # Add some random noise to create variation
+            noise = np.random.normal(0, 10, (self.width, self.height))
+            water_levels = np.clip(water_levels + noise, 0, 100)
+        else:
+            # Create uniform water distribution with small random variations
+            base_water = self.max_water_capacity  # Base water level for all cells
+            variation = np.random.normal(0, 0, (self.width, self.height))  # Small random variations
+            water_levels = np.clip(base_water + variation, 0, self.max_water_capacity+1)
         
-        # Add some random noise to create variation
-        noise = np.random.normal(0, 10, (self.width, self.height))
-        water_levels = np.clip(water_levels + noise, 0, 100)
-        
-        # Initialize water grid with clustered values
+        # Initialize water grid with values
         self.water_grid = []
         for x in range(self.width):
             row = []
             for y in range(self.height):
-                water_cell = WaterCell((x, y), max_capacity=100, base_replenishment=0.01)
+                water_cell = WaterCell((x, y), max_capacity=self.max_water_capacity,base_replenishment=self.base_water_replenishment)
                 water_cell.current_water = water_levels[x][y]
-                water_cell.calculate_distance_to_dc(self.dc_pos)
                 row.append(water_cell)
             self.water_grid.append(row)
     
     def create_human_agents(self):
-        """Create and place human agents"""
+        """Create and place human agents randomly"""
         for i in range(self.num_humans):
             # Find valid position with nearby water
             attempts = 0
@@ -154,7 +162,7 @@ class WaterCompetitionModel(Model):
                     
                     if has_water_access:
                         # Create agent without position
-                        human = HumanAgent(model=self)
+                        human = HumanAgent(model=self,water_needed=self.human_water_needs)
                         
                         # Place agent on grid (this sets human.pos automatically)
                         self.grid.place_agent(human, (x, y))
@@ -179,21 +187,20 @@ class WaterCompetitionModel(Model):
                 print(f"Warning: Human agent {human.unique_id} placed without water access verification")
     
     def create_ai_agents(self):
-        """Create AI agents and place them near the data center"""
-        dc_x, dc_y = self.dc_pos
-        
+        """Create AI agents and place them randomly on the grid"""
         for i in range(self.num_ai_agents):
-            ai_agent = AIAgent(model=self, activity_level=1.0)
+            ai_agent = AIAgent(model=self, activity_level=1.0, water_consumption_rate=self.ai_consumption_rate)
             
-            # Place AI agents randomly within a small radius of the data center
-            angle = self.random.random() * 2 * math.pi
-            distance = self.random.random() * (self.dc_influence_radius)  # Within the influence radius
-            x = int(dc_x + distance * math.cos(angle))
-            y = int(dc_y + distance * math.sin(angle))
+            # Place AI agents randomly on the grid
+            x = self.random.randrange(self.width)
+            y = self.random.randrange(self.height)
             
-            # Ensure position is within grid bounds
-            x = max(0, min(x, self.width - 1))
-            y = max(0, min(y, self.height - 1))
+            # Find an empty cell
+            attempts = 0
+            while not self.grid.is_cell_empty((x, y)) and attempts < 100:
+                x = self.random.randrange(self.width)
+                y = self.random.randrange(self.height)
+                attempts += 1
             
             # Place AI agent on the grid
             self.grid.place_agent(ai_agent, (x, y))
@@ -201,27 +208,10 @@ class WaterCompetitionModel(Model):
             # Verify position was set correctly
             assert hasattr(ai_agent, 'pos'), f"AI agent {ai_agent.unique_id} missing pos attribute"
             assert ai_agent.pos == (x, y), f"AI agent {ai_agent.unique_id} pos mismatch"
-            
-            # Also add to data center for water consumption tracking
-            self.data_center.add_ai_agent(ai_agent)
     
     def update_water_system(self):
-        """Update all water cells based on AI consumption"""
-        total_ai_consumption = self.data_center.calculate_total_consumption()
-        
-        # Update water availability at data center
-        self.dc_water_available = self.data_center.consume_water()
-        
-        # Update replenishment rates for all water cells
-        for row in self.water_grid:
-            for water_cell in row:
-                water_cell.update_replenishment_rate(
-                    total_ai_consumption, 
-                    self.dc_influence_radius, 
-                    self.ai_impact_coeff
-                )
-                
-        # Replenish water in all cells
+        """Update all water cells - natural replenishment only"""
+        # Simple natural replenishment for all cells
         for row in self.water_grid:
             for water_cell in row:
                 water_cell.replenish_water()
@@ -251,7 +241,6 @@ class WaterCompetitionModel(Model):
     
     def check_stopping_conditions(self):
         """Check if model should stop (optional)"""
-
         human_agents = [agent for agent in self.agents 
                        if isinstance(agent, HumanAgent)]
         

@@ -4,14 +4,14 @@ import random
 class AIAgent(Agent):
     """AI agent that consumes water through data center - Mesa 3.x compatible"""
     
-    def __init__(self, model, activity_level=1.0, unique_id=None, **kwargs):
+    def __init__(self, model, activity_level=1.0, water_consumption_rate=0.5, unique_id=None, **kwargs):
         super().__init__(model)
         
         if unique_id is not None:
             self.unique_id = unique_id
             
         self.activity_level = activity_level
-        self.water_consumption_rate = 0.5  # Base water consumption per step
+        self.water_consumption_rate = water_consumption_rate# Base water consumption per step
         self.growth_rate = 0.02
         self.max_activity = 10.0
         

@@ -1,9 +1,10 @@
 from mesa import Agent
+import random
 
 class HumanAgent(Agent):
     """Human agent that consumes water and adjusts cooperation level - Mesa 3.x compatible"""
     
-    def __init__(self, model, pos=None, unique_id=None, **kwargs):
+    def __init__(self, model,water_needed=5,pos=None, unique_id=None, **kwargs):
         super().__init__(model)
 
         # self.pos will be set by grid.place_agent()
@@ -19,16 +20,6 @@ class HumanAgent(Agent):
         self.cooperation_decrease = 0.15
         self.memory_length = 5
         self.satisfaction_threshold = 0.8
-        
-    def get_moore_neighborhood(self):
-        """Get Moore neighborhood cells (8-connected)"""
-        if not hasattr(self, 'pos') or self.pos is None:
-            return []  # Return empty list if agent has no position for soft failure
-        
-        neighborhood = self.model.grid.get_neighborhood(
-            self.pos, moore=True, include_center=False, radius=1
-        )
-        return neighborhood
     
     def assess_local_water(self):
         """Assess water availability in local neighborhood"""
@@ -45,22 +36,32 @@ class HumanAgent(Agent):
         return total_local_water, available_cells
     
     def consume_water(self):
-        """Attempt to consume water from local neighborhood"""
-        neighborhood = self.get_moore_neighborhood()
-        remaining_need = self.water_need
-        consumed = 0
+        """Search through neighborhood cells in random order for water"""
+
+        neighborhood = self.model.grid.get_neighborhood(self.pos, moore=True, include_center=False, radius=1)
+
+        # Shuffle neighborhood to get random order
+        shuffled_neighborhood = list(neighborhood).copy()
+        self.model.random.shuffle(shuffled_neighborhood)
         
-        # Try to consume from neighborhood cells
-        for cell_pos in neighborhood:
-            if remaining_need <= 0:
-                break
+        total_consumed = 0
+        
+        # Go through each cell in random order until we have enough water
+        for cell_pos in shuffled_neighborhood:
             water_cell = self.model.water_grid[cell_pos[0]][cell_pos[1]]
-            consumption = water_cell.consume_water(remaining_need)
-            consumed += consumption
-            remaining_need -= consumption
+            
+            # Calculate how much more water we need
+            remaining_need = self.water_need - total_consumed
+            
+            if remaining_need <= 0:
+                break  # We have enough water
+            
+            # Consume water from this cell
+            consumed_from_cell = water_cell.consume_water(remaining_need)
+            total_consumed += consumed_from_cell
         
-        # Update satisfaction
-        satisfaction_ratio = consumed / self.water_need
+        # Now update satisfaction based on total consumption
+        satisfaction_ratio = total_consumed / self.water_need
         self.water_satisfied = satisfaction_ratio >= self.satisfaction_threshold
         
         # Update memory
@@ -68,7 +69,7 @@ class HumanAgent(Agent):
         if len(self.memory) > self.memory_length:
             self.memory.pop(0)
             
-        return consumed
+        return total_consumed
     
     def update_cooperation_level(self):
         """Update cooperation level based on recent water satisfaction"""
@@ -82,54 +83,16 @@ class HumanAgent(Agent):
             self.movement_state = "searching"
     
     def decide_movement(self):
-        """Decide whether and where to move"""
+        """Decide whether and where to move - only if unsatisfied"""
         if not hasattr(self, 'pos') or self.pos is None:
             return  # Can't move if agent has no position
-            
-        if self.movement_state == "searching":
-            # Look for better water availability in extended neighborhood
-            possible_moves = self.model.grid.get_neighborhood(
-                self.pos, moore=True, include_center=False, radius=2
-            )
-            
-            best_pos = None
-            best_water = 0
-            
-            for candidate_pos in possible_moves:
-                # Check if position is empty
-                if self.model.grid.is_cell_empty(candidate_pos):
-                    # Evaluate water availability around candidate position
-                    candidate_neighborhood = self.model.grid.get_neighborhood(
-                        candidate_pos, moore=True, include_center=False, radius=1
-                    )
-                    
-                    total_water = sum(
-                        self.model.water_grid[pos[0]][pos[1]].current_water 
-                        for pos in candidate_neighborhood
-                    )
-                    
-                    if total_water > best_water:
-                        best_water = total_water
-                        best_pos = candidate_pos
-            
-            # Move to better position if found
-            if best_pos and best_water > 0:
-                self.model.grid.move_agent(self, best_pos)
-                
-            # Check if original position is now good
-            elif self.original_pos and self.pos != self.original_pos:
-                original_neighborhood = self.model.grid.get_neighborhood(
-                    self.original_pos, moore=True, include_center=False, radius=1
-                )
-                original_water = sum(
-                    self.model.water_grid[pos[0]][pos[1]].current_water 
-                    for pos in original_neighborhood
-                )
-                
-                # Return to original with some probability if it's good again
-                if original_water > self.water_need and self.model.random.random() < 0.3:
-                    if self.model.grid.is_cell_empty(self.original_pos):
-                        self.model.grid.move_agent(self, self.original_pos)
+        
+        # Only allow movement if agent is unsatisfied
+        if not self.water_satisfied:
+            # Look for next move 
+            possible_moves = self.model.grid.get_neighborhood(self.pos, moore=True, include_center=False)
+            new_pos = random.choice(possible_moves)
+            self.model.grid.move_agent(self,new_pos)
     
     def step(self):
         """Main step function called each timestep"""
@@ -143,5 +106,5 @@ class HumanAgent(Agent):
         # Update cooperation based on satisfaction
         self.update_cooperation_level()
         
-        # Decide on movement
+        # Decide on movement (only if unsatisfied)
         self.decide_movement()
