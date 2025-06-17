@@ -37,7 +37,9 @@ def PlotlySpaceComponent(model):
         zmin=0,
         zmax=model.max_water_capacity,
         name='Water Levels',
-        showlegend=False
+        showlegend=False,
+        hoverinfo='text',
+        hoverlabel=dict(bgcolor="white", font_size=12)
     ))
     
     # TRACE 1: ALL humans (always present, even if empty)
@@ -66,13 +68,15 @@ def PlotlySpaceComponent(model):
         x=human_x,
         y=human_y,
         mode='markers',
-        marker=dict(size=10, color=human_colors, opacity=0.8),
+        marker=dict(size=10, color=human_colors, opacity=0.8, line=dict(width=1, color='DarkSlateGrey')),
         name='Human Agents',
         hovertemplate='<b>Human</b><br>ID: %{text}<br>Cooperation: %{customdata:.2f}<extra></extra>',
         text=human_texts,
         customdata=human_cooperation,
         visible=True if human_agents else 'legendonly',
-        showlegend=False
+        showlegend=False,
+        hoverinfo='text',
+        hoverlabel=dict(bgcolor="white", font_size=12)
     ))
     
     # TRACE 2: ALL AI agents (always present, even if empty)
@@ -82,21 +86,28 @@ def PlotlySpaceComponent(model):
         x=[a.pos[0] for a in ai_agents] if ai_agents else [],
         y=[a.pos[1] for a in ai_agents] if ai_agents else [],
         mode='markers',
-        marker=dict(size=12, color='purple', symbol='square', opacity=0.9),
+        marker=dict(size=12, color='purple', symbol='square', opacity=0.9, line=dict(width=1, color='DarkSlateGrey')),
         name='AI Agents',
         hovertemplate='<b>AI Agent</b><br>ID: %{text}<extra></extra>',
         text=[str(a.unique_id) for a in ai_agents] if ai_agents else [],
         visible=True if ai_agents else 'legendonly',
-        showlegend=False
+        showlegend=False,
+        hoverinfo='text',
+        hoverlabel=dict(bgcolor="white", font_size=12)
     ))
     
+    # Update layout with proper configuration for event handling
     fig.update_layout(
         title=f"Water Competition - Step {model.steps}",
         xaxis=dict(range=[0, model.width], title='X'),
         yaxis=dict(range=[0, model.height], title='Y', scaleanchor="x"),
         width=max(800, model.width * 4),
         height=max(650, model.height * 3),
-        showlegend=False
+        showlegend=False,
+        # Add configuration to prevent event handling issues
+        hovermode='closest',
+        clickmode='event',
+        dragmode='pan'
     )
     
     solara.FigurePlotly(fig)
