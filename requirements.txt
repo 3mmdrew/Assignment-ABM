@@ -7,4 +7,5 @@ ipywidgets>=8.0.0
 plotly>=5.17.0
 plotly-express>=0.4.1
 
+numpy
 pydantic
