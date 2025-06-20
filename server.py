@@ -1,0 +1,236 @@
+# app.py - SolaraViz Frontend for WaterToC Mesa Model
+import solara
+import pandas as pd
+import plotly.graph_objects as go
+import plotly.express as px
+from plotly.subplots import make_subplots
+import numpy as np
+from typing import Optional
+
+from src.model import WaterToC
+
+# Reactive variables for model parameters
+height = solara.reactive(20)
+width = solara.reactive(20)
+initial_humans = solara.reactive(10)
+initial_ai = solara.reactive(10)
+c_payoff = solara.reactive(0.5)
+d_payoff = solara.reactive(1.0)
+max_water_capacity = solara.reactive(10)
+water_cell_density = solara.reactive(0.3)
+max_steps = solara.reactive(100)
+seed = solara.reactive(42)
+
+# Reactive variables for simulation state
+model_data = solara.reactive(None)
+is_running = solara.reactive(False)
+current_step = solara.reactive(0)
+
+def run_simulation():
+    """Run the Mesa model simulation"""
+    if WaterToC is None:
+        return pd.DataFrame()
+    
+    try:
+        # Create model instance
+        model = WaterToC(
+            height=height.value,
+            width=width.value,
+            initial_humans=initial_humans.value,
+            initial_ai=initial_ai.value,
+            C_Payoff=c_payoff.value,
+            D_Payoff=d_payoff.value,
+            max_water_capacity=max_water_capacity.value,
+            water_cell_density=water_cell_density.value,
+            seed=seed.value
+        )
+        
+        # Run simulation
+        for i in range(max_steps.value):
+            model.step()
+            current_step.value = i + 1
+        
+        # Get collected data
+        data = model.datacollector.get_model_vars_dataframe()
+        return data
+    
+    except Exception as e:
+        print(f"Error running simulation: {e}")
+        return pd.DataFrame()
+
+@solara.component
+def ParameterControls():
+    """Component for model parameter controls"""
+    with solara.Card("Model Parameters"):
+        with solara.Column():
+            # Grid parameters
+            solara.SliderInt("Grid Height", value=height, min=10, max=50)
+            solara.SliderInt("Grid Width", value=width, min=10, max=50)
+            
+            # Agent parameters
+            solara.SliderInt("Initial Humans", value=initial_humans, min=1, max=50)
+            solara.SliderInt("Initial AI", value=initial_ai, min=1, max=50)
+            
+            # Payoff parameters
+            solara.SliderFloat("Cooperation Payoff", value=c_payoff, min=0.0, max=2.0, step=0.1)
+            solara.SliderFloat("Defection Payoff", value=d_payoff, min=0.0, max=2.0, step=0.1)
+            
+            # Water parameters
+            solara.SliderInt("Max Water Capacity", value=max_water_capacity, min=1, max=20)
+            solara.SliderFloat("Water Cell Density", value=water_cell_density, min=0.1, max=1.0, step=0.1)
+            
+            # Simulation parameters
+            solara.SliderInt("Max Steps", value=max_steps, min=10, max=500)
+            solara.SliderInt("Random Seed", value=seed, min=1, max=1000)
+
+@solara.component
+def SimulationControls():
+    """Component for simulation controls"""
+    def on_run_click():
+        is_running.value = True
+        current_step.value = 0
+        data = run_simulation()
+        model_data.value = data
+        is_running.value = False
+    
+    with solara.Card("Simulation Controls"):
+        solara.Button(
+            "Run Simulation", 
+            on_click=on_run_click, 
+            disabled=is_running.value,
+            color="primary"
+        )
+        
+        if is_running.value:
+            solara.Text(f"Running... Step {current_step.value}/{max_steps.value}")
+        elif model_data.value is not None:
+            solara.Text(f"Simulation completed: {len(model_data.value)} steps")
+
+@solara.component
+def TimeSeriesPlots():
+    """Component for time series visualizations"""
+    if model_data.value is None or model_data.value.empty:
+        solara.Markdown("No data available. Run a simulation first.")
+        return
+    
+    data = model_data.value.reset_index()
+    
+    # Create subplots
+    fig = make_subplots(
+        rows=2, cols=2,
+        subplot_titles=('Total Water Over Time', 'Agent Populations', 
+                       'Cooperation vs Defection', 'Water Distribution'),
+        specs=[[{}, {}], [{}, {}]]
+    )
+    
+    # Plot 1: Total Water Over Time
+    if 'Total_Water' in data.columns:
+        fig.add_trace(
+            go.Scatter(x=data.index, y=data['Total_Water'], 
+                      name='Total Water', line=dict(color='blue')),
+            row=1, col=1
+        )
+    
+    # Plot 2: Agent Populations
+    if 'Cooperators' in data.columns and 'Defectors' in data.columns:
+        fig.add_trace(
+            go.Scatter(x=data.index, y=data['Cooperators'], 
+                      name='Cooperators', line=dict(color='green')),
+            row=1, col=2
+        )
+        fig.add_trace(
+            go.Scatter(x=data.index, y=data['Defectors'], 
+                      name='Defectors', line=dict(color='red')),
+            row=1, col=2
+        )
+    
+    # Plot 3: Cooperation Rate
+    if 'Cooperators' in data.columns and 'Defectors' in data.columns:
+        total_agents = data['Cooperators'] + data['Defectors']
+        cooperation_rate = data['Cooperators'] / total_agents * 100
+        fig.add_trace(
+            go.Scatter(x=data.index, y=cooperation_rate, 
+                      name='Cooperation Rate (%)', line=dict(color='purple')),
+            row=2, col=1
+        )
+    
+    # Plot 4: Water per Agent (if available)
+    if 'Total_Water' in data.columns and 'Cooperators' in data.columns and 'Defectors' in data.columns:
+        total_agents = data['Cooperators'] + data['Defectors']
+        water_per_agent = data['Total_Water'] / total_agents
+        fig.add_trace(
+            go.Scatter(x=data.index, y=water_per_agent, 
+                      name='Water per Agent', line=dict(color='orange')),
+            row=2, col=2
+        )
+    
+    # Update layout
+    fig.update_layout(
+        height=600,
+        title_text="WaterToC Model Analysis",
+        showlegend=True
+    )
+    
+    # Update axes labels
+    fig.update_xaxes(title_text="Time Step")
+    fig.update_yaxes(title_text="Total Water", row=1, col=1)
+    fig.update_yaxes(title_text="Number of Agents", row=1, col=2)
+    fig.update_yaxes(title_text="Cooperation Rate (%)", row=2, col=1)
+    fig.update_yaxes(title_text="Water per Agent", row=2, col=2)
+    
+    solara.FigurePlotly(fig)
+
+@solara.component
+def DataTable():
+    """Component to display raw data table"""
+    if model_data.value is None or model_data.value.empty:
+        return
+    
+    with solara.Card("Simulation Data"):
+        # Show last 10 rows of data
+        display_data = model_data.value.tail(10).round(3)
+        solara.DataFrame(display_data)
+
+@solara.component
+def SummaryStats():
+    """Component to display summary statistics"""
+    if model_data.value is None or model_data.value.empty:
+        return
+    
+    data = model_data.value
+    
+    with solara.Card("Summary Statistics"):
+        with solara.Columns([1, 1]):
+            with solara.Column():
+                if 'Total_Water' in data.columns:
+                    solara.Text(f"**Final Water:** {data['Total_Water'].iloc[-1]:.2f}")
+                    solara.Text(f"**Average Water:** {data['Total_Water'].mean():.2f}")
+                    solara.Text(f"**Max Water:** {data['Total_Water'].max():.2f}")
+            
+            with solara.Column():
+                if 'Cooperators' in data.columns:
+                    solara.Text(f"**Final Cooperators:** {data['Cooperators'].iloc[-1]}")
+                if 'Defectors' in data.columns:
+                    solara.Text(f"**Final Defectors:** {data['Defectors'].iloc[-1]}")
+                if 'Cooperators' in data.columns and 'Defectors' in data.columns:
+                    final_coop_rate = data['Cooperators'].iloc[-1] / (data['Cooperators'].iloc[-1] + data['Defectors'].iloc[-1]) * 100
+                    solara.Text(f"**Final Cooperation Rate:** {final_coop_rate:.1f}%")
+
+@solara.component
+def Page():
+    """Main page component"""
+    solara.Title("WaterToC Mesa Model Visualization")
+    
+    with solara.Sidebar():
+        ParameterControls()
+        SimulationControls()
+        SummaryStats()
+    
+    # Main content area
+    TimeSeriesPlots()
+    DataTable()
+
+# Run the app
+if __name__ == "__main__":
+    # You can run this with: solara run server.py
+    Page()
