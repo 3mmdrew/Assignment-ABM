@@ -68,6 +68,7 @@ class WaterToC(Model):
                  initial_payoff_matrix=0.04, 
                  max_water_capacity=10,
                  water_cell_density=0.3,
+                 theta=3,  # Add theta parameter
                  seed=None):
         '''
         Initialize the Water Tragedy of Commons model
@@ -81,7 +82,7 @@ class WaterToC(Model):
         self.initial_payoff_matrix = initial_payoff_matrix
         self.max_water_capacity = max_water_capacity
         self.water_cell_density = water_cell_density
-
+        self.theta = theta  # Store theta
         self.C_Payoff = C_Payoff
         self.D_Payoff = D_Payoff
 
@@ -97,14 +98,20 @@ class WaterToC(Model):
         # Create agents
         self._create_agents()
 
-        # Data collection
+        # Data collection (add enhanced reporters)
         self.datacollector = DataCollector(
             model_reporters={
                 "Total_Water": self._get_total_water,
                 "Human_Count": lambda m: len([a for a in m.agents if isinstance(a, Human)]),
                 "AI_Count": lambda m: len([a for a in m.agents if isinstance(a, AI)]),
                 "Cooperators": self._count_cooperators,
-                "Defectors": self._count_defectors
+                "Defectors": self._count_defectors,
+                "Total_Water_Capacity": self._get_total_water_capacity,
+                "Environment_State": self._get_environment_state,
+                "Coop_Fraction": self._get_coop_fraction,
+                "theta": lambda m: m.theta,
+                "Avg_Water_Per_Cell": self._get_avg_water_per_cell,
+                "Local_Coop_Variance": lambda m: np.var(m._get_local_cooperation_map()),
             }
         )
 
@@ -173,16 +180,44 @@ class WaterToC(Model):
         return (0, 0)
 
     def replenish_water(self):
-        """Replenish water in all water cells"""
-        # Only replenish where there are water sources
-        self.water_levels = np.where(
-            self.has_water,
-            np.minimum(
-                self.water_capacity,
-                self.water_levels + self.replenishment_rates
-            ),
-            self.water_levels  # No change for non-water cells
-        )
+        """Replenish water with LOCAL environmental feedback"""
+        for x in range(self.width):
+            for y in range(self.height):
+                if not self.has_water[x, y]:
+                    continue
+                # Count local cooperators and defectors around this water cell
+                local_cooperators = 0
+                local_defectors = 0
+                neighbors = self.grid.get_neighbors(
+                    (x, y), moore=True, radius=3, include_center=True
+                )
+                for agent in neighbors:
+                    if hasattr(agent, 'strategy'):
+                        if agent.strategy == Strategy.COOPERATE:
+                            local_cooperators += 1
+                        else:
+                            local_defectors += 1
+                # Calculate local cooperation fraction
+                local_total = local_cooperators + local_defectors
+                if local_total == 0:
+                    # No agents nearby - use base replenishment
+                    effective_replenishment = self.replenishment_rates[x, y]
+                else:
+                    local_coop_fraction = local_cooperators / local_total
+                    # Weitz-style feedback
+                    cooperation_threshold = 1.0 / self.theta if self.theta > 0 else 0.5
+                    local_feedback_strength = self.theta * local_coop_fraction - 1.0
+                    current_n = (self.water_levels[x, y] / self.water_capacity[x, y] 
+                                 if self.water_capacity[x, y] > 0 else 0)
+                    env_capacity_factor = current_n * (1 - current_n)
+                    local_feedback_term = 1.0 + 0.5 * env_capacity_factor * local_feedback_strength
+                    local_feedback_term = np.clip(local_feedback_term, 0.1, 3.0)
+                    effective_replenishment = self.replenishment_rates[x, y] * local_feedback_term
+                # Update this specific water cell
+                self.water_levels[x, y] = min(
+                    self.water_capacity[x, y],
+                    self.water_levels[x, y] + effective_replenishment
+                )
 
     def get_water_at(self, pos):
         """Get water level at position"""
@@ -241,3 +276,47 @@ class WaterToC(Model):
         """Count agents currently using defect strategy"""
         return len([a for a in self.agents 
                    if hasattr(a, 'strategy') and a.strategy == Strategy.DEFECT])
+
+    def _get_total_water_capacity(self):
+        """Get total water capacity across all water cells"""
+        return np.sum(self.water_capacity[self.has_water])
+
+    def _get_environment_state(self):
+        """Get normalized environment state (0-1)"""
+        total_capacity = self._get_total_water_capacity()
+        total_water = self._get_total_water()
+        return total_water / total_capacity if total_capacity > 0 else 0
+
+    def _get_coop_fraction(self):
+        """Get cooperation fraction across all water cells"""
+        total_cooperators = self._count_cooperators()
+        total_agents = self._count_cooperators() + self._count_defectors()
+        return total_cooperators / total_agents if total_agents > 0 else 0
+
+    def _get_avg_water_per_cell(self):
+        """Get average water per water cell"""
+        water_cells_count = np.sum(self.has_water)
+        if water_cells_count > 0:
+            return np.sum(self.water_levels[self.has_water]) / water_cells_count
+        return 0
+
+    def _get_local_cooperation_map(self):
+        """Get a map of local cooperation rates for visualization"""
+        coop_map = np.zeros((self.width, self.height))
+        for x in range(self.width):
+            for y in range(self.height):
+                neighbors = self.grid.get_neighbors(
+                    (x, y), moore=True, radius=2, include_center=True
+                )
+                local_cooperators = 0
+                local_total = 0
+                for agent in neighbors:
+                    if hasattr(agent, 'strategy'):
+                        local_total += 1
+                        if agent.strategy == Strategy.COOPERATE:
+                            local_cooperators += 1
+                if local_total > 0:
+                    coop_map[x, y] = local_cooperators / local_total
+                else:
+                    coop_map[x, y] = 0.5  # Neutral when no agents
+        return coop_map

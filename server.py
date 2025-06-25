@@ -129,7 +129,7 @@ def TimeSeriesPlots():
             'Total Water vs Capacity',
             'Strategy Counts Over Time'
         ),
-        vertical_spacing=0.08
+        vertical_spacing=0.05
     )
     
     # Plot 1: Cooperation Fraction
@@ -214,12 +214,16 @@ def TimeSeriesPlots():
         height=900,
         title_text="WaterToC Model Dynamics",
         showlegend=True,
+        # Adjust margins to make room for title and legend
+        margin=dict(t=100, r=150),  # Top margin for title, right margin for legend
+        # Position legend on the right side to avoid overlap
         legend=dict(
-            orientation="h",
-            yanchor="bottom",
-            y=1.02,
-            xanchor="right",
-            x=1
+            orientation="v",  # Vertical orientation for right-side placement
+            yanchor="middle",
+            y=0.5,  # Center vertically
+            xanchor="left",
+            x=1.02,  # Just outside the plot area on the right
+            bgcolor='rgba(255,255,255,0.8)'  # Semi-transparent background
         )
     )
     
@@ -258,7 +262,12 @@ def PhaseSpacePlot():
                 color=data.index,
                 colorscale='Viridis',
                 size=4,
-                colorbar=dict(title="Time Step")
+                colorbar=dict(
+                    title="Time Step",
+                    x=1.15,  # Position colorbar to the right
+                    len=0.8,  # Length of colorbar
+                    thickness=15  # Width of colorbar
+                )
             )
         )
     )
@@ -287,7 +296,17 @@ def PhaseSpacePlot():
         title="Phase Space: Cooperation vs Environment State",
         xaxis_title="Cooperation Fraction",
         yaxis_title="Environment State (n)",
-        height=500
+        height=500,
+        # Adjust margins to make room for colorbar
+        margin=dict(r=100),  # Right margin for colorbar
+        # Position legend to avoid overlap with colorbar
+        legend=dict(
+            x=0.02,  # Left side
+            y=0.98,  # Top
+            xanchor='left',
+            yanchor='top',
+            bgcolor='rgba(255,255,255,0.8)'  # Semi-transparent background
+        )
     )
     
     solara.FigurePlotly(fig)
@@ -305,11 +324,11 @@ def SpatialSummary():
             final_variance = data['Local_Coop_Variance'].iloc[-1]
             avg_variance = data['Local_Coop_Variance'].mean()
             
-            solara.Text(f"**Final Spatial Cooperation Variance:** {final_variance:.4f}")
-            solara.Text(f"**Average Spatial Variance:** {avg_variance:.4f}")
-            solara.Text("Higher values indicate stronger spatial clustering/patterns")
+            solara.Markdown(f"**Final Spatial Cooperation Variance:** {final_variance:.4f}")
+            solara.Markdown(f"**Average Spatial Variance:** {avg_variance:.4f}")
+            solara.Markdown("Higher values indicate stronger spatial clustering/patterns")
         else:
-            solara.Text("Add 'Local_Coop_Variance' to model reporters to see spatial patterns")
+            solara.Markdown("Add 'Local_Coop_Variance' to model reporters to see spatial patterns")
 
 @solara.component
 def DataTable():
@@ -317,10 +336,11 @@ def DataTable():
     if model_data.value is None or model_data.value.empty:
         return
     
-    with solara.Card("Recent Simulation Data"):
-        # Show last 10 rows of data
-        display_data = model_data.value.tail(10).round(3)
-        solara.DataFrame(display_data)
+    with solara.Column(style={"max-width": "800px", "margin": "auto"}):
+        with solara.Card("Recent Simulation Data"):
+            # Show last 10 rows of data
+            display_data = model_data.value.tail(10).round(3)
+            solara.DataFrame(display_data)
 
 @solara.component
 def SummaryStats():
@@ -334,19 +354,19 @@ def SummaryStats():
         with solara.Columns([1, 1]):
             with solara.Column():
                 if 'Total_Water' in data.columns:
-                    solara.Text(f"**Final Water Level:** {data['Total_Water'].iloc[-1]:.2f}")
+                    solara.Markdown(f"**Final Water Level:** {data['Total_Water'].iloc[-1]:.2f}")
                 if 'Total_Water_Capacity' in data.columns:
-                    solara.Text(f"**Water Capacity:** {data['Total_Water_Capacity'].iloc[-1]:.2f}")
+                    solara.Markdown(f"**Water Capacity:** {data['Total_Water_Capacity'].iloc[-1]:.2f}")
                 if 'Environment_State' in data.columns:
-                    solara.Text(f"**Final Environment State:** {data['Environment_State'].iloc[-1]:.3f}")
+                    solara.Markdown(f"**Final Environment State:** {data['Environment_State'].iloc[-1]:.3f}")
             
             with solara.Column():
                 if 'Coop_Fraction' in data.columns:
                     final_coop_rate = data['Coop_Fraction'].iloc[-1] * 100
                     avg_coop_rate = data['Coop_Fraction'].mean() * 100
-                    solara.Text(f"**Final Cooperation Rate:** {final_coop_rate:.1f}%")
-                    solara.Text(f"**Average Cooperation Rate:** {avg_coop_rate:.1f}%")
-                    solara.Text(f"**Cooperation Threshold (1/θ):** {(1/theta.value):.3f}")
+                    solara.Markdown(f"**Final Cooperation Rate:** {final_coop_rate:.1f}%")
+                    solara.Markdown(f"**Average Cooperation Rate:** {avg_coop_rate:.1f}%")
+                    solara.Markdown(f"**Cooperation Threshold (1/θ):** {(1/theta.value):.3f}")
 
 @solara.component
 def Page():
