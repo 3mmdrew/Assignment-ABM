@@ -1,25 +1,11 @@
-<<<<<<< Updated upstream
-# server.py
-from mesa.visualization.modules import CanvasGrid, ChartModule
-from mesa.visualization.ModularVisualization import ModularServer
-from mesa.visualization.UserParam import Slider
-=======
-# Fixed app.py - SolaraViz Frontend for WaterToC Mesa Model
 import solara
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import numpy as np
 from typing import Optional
->>>>>>> Stashed changes
+from src.model import WaterToC
 
-from model import WaterConflictModel
-from agents import WaterConflictAgent
-
-<<<<<<< Updated upstream
-def composite_portrayal(agent):
-    portrayals = []
-=======
 # Reactive variables for model parameters
 height = solara.reactive(20)
 width = solara.reactive(20)
@@ -32,71 +18,15 @@ water_cell_density = solara.reactive(0.3)
 theta = solara.reactive(3.0)
 max_steps = solara.reactive(100)
 seed = solara.reactive(42)
->>>>>>> Stashed changes
 
-    # Background cell (water)
-    if agent is not None:
-        x, y = agent.pos
-        water = agent.model.water_grid[x][y]
-        blue = int(255 * water)
-        portrayals.append({
-            "Shape": "rect",
-            "Color": f"rgb(0,0,{blue})",
-            "Filled": "true",
-            "Layer": 0,
-            "w": 1, "h": 1
-        })
+model_data = solara.reactive(None)
+is_running = solara.reactive(False)
+current_step = solara.reactive(0)
 
-<<<<<<< Updated upstream
-        # Agent on top
-        color = "blue" if agent.agent_type == "Human" else "red"
-        if agent.strategy == "D":
-            color = "black"
-
-        portrayals.append({
-            "Shape": "circle",
-            "Color": color,
-            "Filled": True,
-            "Layer": 1,
-            "r": 0.5,
-        })
-
-    return portrayals
-
-canvas = CanvasGrid(composite_portrayal, 50, 50, 500, 500)
-
-chart = ChartModule([
-    {"Label": "GlobalEnv", "Color": "green"},
-    {"Label": "CooperationRate", "Color": "blue"},
-    {"Label": "DefectorCount", "Color": "red"},
-    {"Label": "TotalWaterExtracted", "Color": "gray"},
-])
-
-model_params = {
-    "width": 50,
-    "height": 50,
-    "num_humans": Slider("# Humans", 100, 10, 300),
-    "num_ais": Slider("# AI agents", 50, 10, 200),
-    "water_patch_ratio": Slider("% Water Cells", 0.3, 0.0, 1.0, 0.05),
-    "initial_coop_rate": Slider("Initial Coop Rate", 0.5, 0.0, 1.0, 0.05),
-    "theta": Slider("Environment Feedback Strength", 1.0, 0.0, 2.0, 0.1),
-}
-
-server = ModularServer(
-    WaterConflictModel,
-    [canvas, chart],
-    "AI-Human Water Conflict Model",
-    model_params
-)
-
-server.port = 8524
-server.launch()
-=======
 def run_simulation():
     """Run the Mesa model simulation"""
     if WaterToC is None:
         return pd.DataFrame()
-
     try:
         # Create model instance
         model = WaterToC(
@@ -111,15 +41,11 @@ def run_simulation():
             theta=theta.value,
             seed=seed.value
         )
-
         for i in range(max_steps.value):
             model.step()
             current_step.value = i + 1
-
         data = model.datacollector.get_model_vars_dataframe()
-        # Remove the manual calculation since it's now done in the model
         return data
-
     except Exception as e:
         print(f"Error running simulation: {e}")
         return pd.DataFrame()
@@ -177,24 +103,22 @@ def TimeSeriesPlots():
         vertical_spacing=0.08
     )
 
-
     # Plot 1: Cooperation Fraction
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Coop_Fraction'], 
-            name='Cooperation Fraction', 
+            x=data.index,
+            y=data['Coop_Fraction'],
+            name='Cooperation Fraction',
             line=dict(color='green', width=2)
         ),
         row=1, col=1
     )
-    
     # Add horizontal line at 1/theta for reference
     theta_line = 1.0 / theta.value
     fig.add_hline(
-        y=theta_line, 
-        line_dash="dash", 
-        line_color="gray", 
+        y=theta_line,
+        line_dash="dash",
+        line_color="gray",
         annotation_text=f"1/θ = {theta_line:.3f}",
         row=1, col=1
     )
@@ -202,9 +126,9 @@ def TimeSeriesPlots():
     # Plot 2: Environment State
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Environment_State'], 
-            name='Environment State (n)', 
+            x=data.index,
+            y=data['Environment_State'],
+            name='Environment State (n)',
             line=dict(color='blue', width=2)
         ),
         row=2, col=1
@@ -213,18 +137,18 @@ def TimeSeriesPlots():
     # Plot 3: Water levels
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Total_Water'], 
-            name='Current Water', 
+            x=data.index,
+            y=data['Total_Water'],
+            name='Current Water',
             line=dict(color='blue', width=2)
         ),
         row=3, col=1
     )
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Total_Water_Capacity'], 
-            name='Max Capacity', 
+            x=data.index,
+            y=data['Total_Water_Capacity'],
+            name='Max Capacity',
             line=dict(color='gray', width=1, dash='dash')
         ),
         row=3, col=1
@@ -233,18 +157,18 @@ def TimeSeriesPlots():
     # Plot 4: Strategy counts
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Cooperators'], 
-            name='Cooperators', 
+            x=data.index,
+            y=data['Cooperators'],
+            name='Cooperators',
             line=dict(color='green', width=2)
         ),
         row=4, col=1
     )
     fig.add_trace(
         go.Scatter(
-            x=data.index, 
-            y=data['Defectors'], 
-            name='Defectors', 
+            x=data.index,
+            y=data['Defectors'],
+            name='Defectors',
             line=dict(color='red', width=2)
         ),
         row=4, col=1
@@ -252,8 +176,8 @@ def TimeSeriesPlots():
 
     # Update layout
     fig.update_layout(
-        height=900, 
-        title_text="WaterToC Model Dynamics", 
+        height=900,
+        title_text="WaterToC Model Dynamics",
         showlegend=True,
         legend=dict(
             orientation="h",
@@ -263,7 +187,6 @@ def TimeSeriesPlots():
             x=1
         )
     )
-    
     # Update axes labels
     fig.update_xaxes(title_text="Time Step", row=4, col=1)
     fig.update_yaxes(title_text="Cooperation Fraction", row=1, col=1)
@@ -273,8 +196,6 @@ def TimeSeriesPlots():
 
     solara.FigurePlotly(fig)
 
-
-
 @solara.component
 def PhaseSpacePlot():
     """Phase space plot showing relationship between cooperation and environment"""
@@ -282,70 +203,74 @@ def PhaseSpacePlot():
         return
 
     data = model_data.value.reset_index()
-    
+
     # This creates a SINGLE plot, so no row/col arguments should be used below.
-    fig = go.Figure() 
-    
+    fig = go.Figure()
+
     # Create phase space plot
-    fig.add_trace(go.Scatter(
-        x=data['Coop_Fraction'],
-        y=data['Environment_State'],
-        mode='markers+lines',
-        name='Phase Trajectory',
-        line=dict(color='purple', width=1),
-        marker=dict(
-            color=data.index,
-            colorscale='Viridis',
-            size=4,
-            colorbar=dict(title="Time Step")
+    fig.add_trace(
+        go.Scatter(
+            x=data['Coop_Fraction'],
+            y=data['Environment_State'],
+            mode='markers+lines',
+            name='Phase Trajectory',
+            line=dict(color='purple', width=1),
+            marker=dict(
+                color=data.index,
+                colorscale='Viridis',
+                size=4,
+                colorbar=dict(title="Time Step")
+            )
         )
-    )) # <-- NO row, col
-    
+    )
+
     # Add start and end points
-    fig.add_trace(go.Scatter(
-        x=[data['Coop_Fraction'].iloc[0]],
-        y=[data['Environment_State'].iloc[0]],
-        mode='markers',
-        name='Start',
-        marker=dict(color='green', size=10, symbol='star')
-    )) # <-- NO row, col
-    
-    fig.add_trace(go.Scatter(
-        x=[data['Coop_Fraction'].iloc[-1]],
-        y=[data['Environment_State'].iloc[-1]],
-        mode='markers',
-        name='End',
-        marker=dict(color='red', size=10, symbol='x')
-    )) # <-- NO row, col
-    
+    fig.add_trace(
+        go.Scatter(
+            x=[data['Coop_Fraction'].iloc[0]],
+            y=[data['Environment_State'].iloc[0]],
+            mode='markers',
+            name='Start',
+            marker=dict(color='green', size=10, symbol='star')
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            x=[data['Coop_Fraction'].iloc[-1]],
+            y=[data['Environment_State'].iloc[-1]],
+            mode='markers',
+            name='End',
+            marker=dict(color='red', size=10, symbol='x')
+        )
+    )
+
     fig.update_layout(
         title="Phase Space: Cooperation vs Environment State",
         xaxis_title="Cooperation Fraction",
         yaxis_title="Environment State (n)",
         height=500
     )
-    
+
     solara.FigurePlotly(fig)
 
-@solara.component  
+@solara.component
 def SpatialSummary():
     """Summary of spatial patterns"""
     if model_data.value is None or model_data.value.empty:
         return
-        
+
     data = model_data.value
-    
+
     with solara.Card("Spatial Pattern Indicators"):
         if 'Local_Coop_Variance' in data.columns:
             final_variance = data['Local_Coop_Variance'].iloc[-1]
             avg_variance = data['Local_Coop_Variance'].mean()
-            
+
             solara.Text(f"**Final Spatial Cooperation Variance:** {final_variance:.4f}")
             solara.Text(f"**Average Spatial Variance:** {avg_variance:.4f}")
             solara.Text("Higher values indicate stronger spatial clustering/patterns")
         else:
             solara.Text("Add 'Local_Coop_Variance' to model reporters to see spatial patterns")
-
 
 @solara.component
 def DataTable():
@@ -377,7 +302,7 @@ def SummaryStats():
 @solara.component
 def Page():
     solara.Title("WaterToC Mesa Model - Weitz et al. Implementation")
-    
+
     with solara.Sidebar():
         ParameterControls()
         SimulationControls()
@@ -390,4 +315,3 @@ def Page():
 
 if __name__ == "__main__":
     Page()
->>>>>>> Stashed changes
