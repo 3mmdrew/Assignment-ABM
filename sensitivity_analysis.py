@@ -17,7 +17,6 @@ import multiprocessing as mp
 from functools import partial
 import itertools
 
-# Import your model
 from src.model import WaterToC
 
 warnings.filterwarnings('ignore')
