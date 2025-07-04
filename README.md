@@ -75,6 +75,7 @@ The `plotting/` directory contains scripts for offline analysis and visualizatio
 * `plotting/`: A directory containing all scripts for data analysis and visualization.
     * `3Dplots_coop.py` / `3Dplots_env.py`: Scripts to generate 3D surface plots for cooperation and environment state gotten from parameter sweep data.
     * `heatmap.py`: Script to generate heatmaps for cooperation & environment from parameter sweep data.
-    * `sweep_analysis.py`: Main script for running parameter sweeps and generating the output CSV ( `water_toc_sweep_results.csv`) used by the plotting scripts.
+    * `sweep_analysis.py`: Main script for running parameter sweeps and generating the output CSV called `water_toc_sweep_results.csv` used by the plotting scripts - this file is too large to upload to github, but one can produce it by running sweep_analysis.py.
     * `limit_cycle_instances.py` / `fpoint.py` : Scripts focused on analyzing and plotting specific system dynamics like limit cycles and fixed points. `limit_cycle_instances.py` creates instances of limit cycles (amount of images is adjustable), whereas `fpoint.py` creates a scatterplot of runs that end up in fixed points.
-* `limit_cycle_analysis.csv`: Output data specifically from limit cycle analysis (not used by any of current plotting files, but potentially useful).
+* `cwd.py`: Performs a time-frequency analysis on the simulation output data (water_toc_sweep_results.csv). Its primary purpose is to identify and characterize oscillatory dynamics in the cooperation fraction using a Continuous Wavelet Transform (CWT).
+* `peak_envelope_oscillations.py`: This script performs a quantitative analysis of the oscillatory dynamics found in the simulation data. Instead of visualizing the frequency content like the wavelet script, this one uses a peak-envelope analysis.
