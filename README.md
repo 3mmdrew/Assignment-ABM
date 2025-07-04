@@ -75,7 +75,6 @@ The `plotting/` directory contains scripts for offline analysis and visualizatio
 * `plotting/`: A directory containing all scripts for data analysis and visualization.
     * `3Dplots_coop.py` / `3Dplots_env.py`: Scripts to generate 3D surface plots for cooperation and environment state gotten from parameter sweep data.
     * `heatmap.py`: Script to generate heatmaps for cooperation & environment from parameter sweep data.
-    * `sweep_analysis.py`: Main script for running parameter sweeps and generating the output CSV.
+    * `sweep_analysis.py`: Main script for running parameter sweeps and generating the output CSV ( `water_toc_sweep_results.csv`) used by the plotting scripts.
     * `limit_cycle_instances.py` / `fpoint.py` : Scripts focused on analyzing and plotting specific system dynamics like limit cycles and fixed points. `limit_cycle_instances.py` creates instances of limit cycles (amount of images is adjustable), whereas `fpoint.py` creates a scatterplot of runs that end up in fixed points.
-* `water_toc_sweep_results.csv`: Output data from a parameter sweep, used by the plotting scripts.
 * `limit_cycle_analysis.csv`: Output data specifically from limit cycle analysis (not used by any of current plotting files, but potentially useful).
